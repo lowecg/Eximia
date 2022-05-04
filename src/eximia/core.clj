@@ -84,10 +84,11 @@
 
 (def ^:private write-element
   (letfn [(write-attrs [out opts attrs]
-            (reduce-kv (fn [^XMLStreamWriter out, k, v]
-                         (let [^QName k ((get opts :key-fn identity) k)] ; OPTIMIZE: `get`s every time
-                           (doto out (.writeAttribute (.getPrefix k) (.getNamespaceURI k) (.getLocalPart k) v))))
-                       out attrs))
+            (let [key-fn (get opts :key-fn identity)]
+              (reduce-kv (fn [^XMLStreamWriter out, k, v]
+                           (let [^QName k (key-fn k)]
+                             (doto out (.writeAttribute (.getPrefix k) (.getNamespaceURI k) (.getLocalPart k) v))))
+                         out attrs)))
           (write-content [out opts content] (reduce (fn [out child] (-write child out opts) out) out content))]
     (fn [out opts tag attrs content]
       (let [^XMLStreamWriter out out
