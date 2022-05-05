@@ -3,6 +3,7 @@
 .nrepl-port
 *.jar
 *.asc
+.clj-kondo/.cache
 
 /.idea
 *.iml
