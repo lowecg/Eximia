@@ -18,11 +18,11 @@
   CDATA blocks can also be read and written as [[CData]] records, processing instructions as [[ProcessingInstruction]]s
   and comments as [[Comment]]s."
   (:refer-clojure :exclude [read])
-  (:import [javax.xml.stream XMLInputFactory XMLStreamReader XMLStreamWriter XMLStreamConstants XMLOutputFactory]
-           [javax.xml.namespace QName]
-           [javax.xml XMLConstants]
-           [java.io Reader Writer InputStream OutputStream StringReader StringWriter]
-           [clojure.lang IPersistentMap]))
+  (:import (clojure.lang IPersistentMap)
+           (java.io InputStream OutputStream Reader StringReader StringWriter Writer)
+           (javax.xml XMLConstants)
+           (javax.xml.namespace QName)
+           (javax.xml.stream XMLInputFactory XMLOutputFactory XMLStreamConstants XMLStreamReader XMLStreamWriter)))
 
 ;;;; # QName Support
 
@@ -97,10 +97,14 @@
           (do (.writeStartElement out (.getPrefix tag) (.getLocalPart tag) (.getNamespaceURI tag))
               (write-attrs out opts attrs)
               (write-content out opts content)
-              (.writeEndElement out))
-          (do (.writeEmptyElement out (.getPrefix tag) (.getLocalPart tag) (.getNamespaceURI tag))
-              (write-attrs out opts attrs)
-              (write-content out opts content)))))))
+              (when (not (:leave-open opts))
+                (.writeEndElement out)))
+          (do
+            (if (:leave-open opts)
+              (.writeStartElement out (.getPrefix tag) (.getLocalPart tag) (.getNamespaceURI tag))
+              (.writeEmptyElement out (.getPrefix tag) (.getLocalPart tag) (.getNamespaceURI tag)))
+            (write-attrs out opts attrs)
+            (write-content out opts content)))))))
 
 (defrecord ^{:doc "A compact element record (but any map with the keys works also)"} Element [tag attrs content]
   WriteXML
@@ -196,6 +200,41 @@
    (with-open [out (StringWriter.)]
      (write tree out opts)
      (.toString out))))
+
+;;;; ## Support writing in fragments
+
+(defn write-fragment
+  "Add the XML fragment to `xml-stream-writer`"
+  [fragment ^XMLStreamWriter xml-stream-writer opts]
+  (-write fragment xml-stream-writer opts))
+
+(defn- start-document [{:keys [tag, attrs, content]}, ^XMLStreamWriter xml-stream-writer, {:keys [xml-version] :as opts}]
+  (if xml-version
+    (.writeStartDocument xml-stream-writer xml-version)
+    (.writeStartDocument xml-stream-writer))
+
+  (write-element xml-stream-writer (assoc opts :leave-open true) ; do not close root hierarchy - subsequent fragments will be added under here!
+                 tag attrs content))
+
+(def ^{:arglists '([root out] [root out opts])} start-fragment
+  "Start a document for writing subsequent fragments, under `root` as XML to `out`, which should be an OutputStream or a Writer (or any [[ToStreamWriter]]).
+
+  Returns the XMLStreamWriter which should be used in subsequent calls to `write-fragment` and `end`
+
+  The optional `opts` as for write."
+  (let [default-output-factory (delay (output-factory {:repairing-namespaces true}))]
+    (fn
+      ([root out] (start-fragment root out {}))
+      ([root out opts]
+       (let [^XMLStreamWriter xml-stream-writer (-stream-writer out (or (get opts :xml-output-factory)
+                                                                        @default-output-factory))]
+         (start-document root xml-stream-writer opts)
+         xml-stream-writer)))))
+
+(defn end-fragment
+  "End the document for fragments. Does not close `out`."
+  [^XMLStreamWriter xml-stream-writer]
+  (.writeEndDocument xml-stream-writer))
 
 ;;;; # Reading
 
