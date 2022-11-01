@@ -26,6 +26,8 @@
 
 ;;;; # QName Support
 
+(set! *warn-on-reflection* true)
+
 (defmethod print-method QName [^QName qname ^Writer out]
   (.write out "#qname[")
   (.write out (.toString qname))
@@ -297,9 +299,11 @@
                   XMLStreamConstants/START_ELEMENT (recur (conj! elems (parse-element input)))
 
                   (XMLStreamConstants/CHARACTERS XMLStreamConstants/ENTITY_REFERENCE)
-                  (let [s (.getText input)]
+                  (let [s (if (.isWhiteSpace input) nil (.getText input))]
                     (.next input)
-                    (recur (conj! elems s)))
+                    (if s
+                      (recur (conj! elems s))
+                      (recur elems)))
 
                   XMLStreamConstants/CDATA
                   (let [s (.getText input)]
