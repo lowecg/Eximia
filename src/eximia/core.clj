@@ -253,9 +253,10 @@
                             [(if (seq? pat) (map eval pat) (eval pat))
                              expr])))))))
 
-(defn- parse-tokens [^XMLStreamReader input {:keys [tag-fn key-fn wrap-cdata preserve]}]
+(defn- parse-tokens [^XMLStreamReader input {:keys [tag-fn key-fn wrap-cdata preserve consume-eagerly? eager-consumer]}]
   (let [tag-fn (or tag-fn identity)
         key-fn (or key-fn identity)
+        consume-eagerly? (or consume-eagerly? (fn [_] false))
         wrap-cdata (boolean wrap-cdata)
         preserve-pis (contains? preserve :processing-instruction)
         preserve-comments (contains? preserve :comment)]
@@ -296,7 +297,12 @@
             (parse-contents [^XMLStreamReader input]
               (loop [elems (transient [])]
                 (eval-case (.getEventType input)
-                  XMLStreamConstants/START_ELEMENT (recur (conj! elems (parse-element input)))
+                  XMLStreamConstants/START_ELEMENT
+                  (if (consume-eagerly? (tag-fn (.getName input)))
+                    (do
+                      (eager-consumer (parse-element input))
+                      (recur elems))
+                    (recur (conj! elems (parse-element input))))
 
                   (XMLStreamConstants/CHARACTERS XMLStreamConstants/ENTITY_REFERENCE)
                   (let [s (if (.isWhiteSpace input) nil (.getText input))]
@@ -402,7 +408,9 @@
   | `:key-fn`            | Function to apply to attribute key `QName`s | An IFn | `identity` |
   | `:wrap-cdata`        | Return CDATA contents wrapped in [[CData]] instead of just the string. | boolean | `false` |
   | `:preserve`          | Return [[ProcessingInstruction]]s and [[Comment]]s instead of skipping them. | A subset of `#{:processing-instruction, :comment}` | `#{}` |
-  | `:xml-input-factory` | The XMLInputFactory to use. See also [[input-factory]]. | An XMLInputFactory | A `(input-factory {:coalescing true})` cached internally in Eximia |"
+  | `:xml-input-factory` | The XMLInputFactory to use. See also [[input-factory]]. | An XMLInputFactory | A `(input-factory {:coalescing true})` cached internally in Eximia |
+  | `:consume-eagerly?`  | A test function on whether to eagerly consume a tag. Eager elements are given to the `:eager-consumer` function rather than added to the current document | An IFn | `false` |
+  | `:eager-consumer`    | Function to process an element eagerly | An IFn | n/a |"
   (let [default-input-factory (delay (input-factory {:coalescing true}))]
     (fn
       ([input] (read input {}))

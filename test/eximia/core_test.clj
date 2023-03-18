@@ -1,17 +1,17 @@
 (ns eximia.core-test
-  (:require [eximia.core :as e]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :refer [for-all]]
-            [clojure.test.check.clojure-test :refer [defspec]]
-            [clojure.string :as str]
             [clojure.walk :refer [postwalk]]
-            [clojure.java.io :as io])
-  (:import [javax.xml XMLConstants]
-           [eximia.core CData]
-           [javax.xml.stream XMLInputFactory XMLOutputFactory]
-           [clojure.lang ExceptionInfo]
-           [java.io StringWriter ByteArrayOutputStream]))
+            [eximia.core :as e])
+  (:import (clojure.lang ExceptionInfo)
+           (eximia.core CData Element)
+           (java.io ByteArrayOutputStream StringWriter)
+           (javax.xml XMLConstants)
+           (javax.xml.stream XMLInputFactory XMLOutputFactory)))
 
 (defn coalesce-strs [string? ->string coll]
   (loop [acc [], coll coll]
@@ -22,7 +22,7 @@
           (recur (conj acc (first coll)) (rest coll))))
       acc)))
 
-(defn canonicalize [string? ->string  tree]
+(defn canonicalize [string? ->string tree]
   (postwalk (fn [tree]
               (cond
                 (and (map? tree) (contains? tree :tag))
@@ -30,7 +30,7 @@
                     e/map->Element
                     (update :content (comp #(filterv (fn [child] (or (not (string? child)) (seq child)))
                                                      %)
-                                                #(coalesce-strs string? ->string %))))
+                                           #(coalesce-strs string? ->string %))))
 
                 (and (map? tree) (contains? tree :target))
                 (-> tree
@@ -49,7 +49,7 @@
 (def name-gen
   (gen/let [c gen/char-alpha
             cs gen/string-alphanumeric]
-           (str c cs)))
+    (str c cs)))
 
 (def content-char-gen
   (gen/such-that (fn [^Character c]
@@ -135,24 +135,24 @@
     (is (= (str "#qname[" (.toString qname) "]") (pr-str qname)))))
 
 (deftest test-factories
-  (doseq [props [{XMLInputFactory/IS_VALIDATING false
-                  XMLInputFactory/IS_NAMESPACE_AWARE true
-                  XMLInputFactory/IS_COALESCING true
-                  XMLInputFactory/IS_REPLACING_ENTITY_REFERENCES false
+  (doseq [props [{XMLInputFactory/IS_VALIDATING                   false
+                  XMLInputFactory/IS_NAMESPACE_AWARE              true
+                  XMLInputFactory/IS_COALESCING                   true
+                  XMLInputFactory/IS_REPLACING_ENTITY_REFERENCES  false
                   XMLInputFactory/IS_SUPPORTING_EXTERNAL_ENTITIES false
-                  XMLInputFactory/SUPPORT_DTD false
-                  XMLInputFactory/REPORTER nil
-                  XMLInputFactory/RESOLVER nil
-                  XMLInputFactory/ALLOCATOR nil}
-                 {:validating false
-                  :namespace-aware true
-                  :coalescing true
-                  :replacing-entity-references false
+                  XMLInputFactory/SUPPORT_DTD                     false
+                  XMLInputFactory/REPORTER                        nil
+                  XMLInputFactory/RESOLVER                        nil
+                  XMLInputFactory/ALLOCATOR                       nil}
+                 {:validating                   false
+                  :namespace-aware              true
+                  :coalescing                   true
+                  :replacing-entity-references  false
                   :supporting-external-entities false
-                  :support-dtd false
-                  :reporter nil
-                  :resolver nil
-                  :allocator nil}]
+                  :support-dtd                  false
+                  :reporter                     nil
+                  :resolver                     nil
+                  :allocator                    nil}]
           :let [inputs (e/input-factory props)]]
     (is (= false (.getProperty inputs XMLInputFactory/IS_VALIDATING)))
     (is (= true (.getProperty inputs XMLInputFactory/IS_NAMESPACE_AWARE)))
@@ -189,6 +189,18 @@
       (is (= expected (e/read (io/reader input-file) opts)))
       (is (= expected (e/read-str (slurp input-file) opts))))))
 
+(deftest read-smoke-test-eager-consumer
+  (let [input-file (io/file "dev-resources/10.xml")
+        c (atom 0)]
+    (e/read (io/input-stream input-file) {:tag-fn           e/qname->unq-keyword, :key-fn e/qname->unq-keyword
+                                          :consume-eagerly? (fn [t]
+                                                              (= t :results))
+                                          :eager-consumer   (fn [^Element e]
+                                                              (is (= (:tag e) :results))
+                                                              (swap! c inc))})
+    ;; 10 documents + "results" in the info summary
+    (is (= @c 11))))
+
 (deftest write-smoke-test
   (let [tree (e/->Element (e/qname "greeting") {(e/qname "style") "programmatic"}
                           ["Hello, world!"])
@@ -216,8 +228,8 @@
   (for-all [el element-gen-all]
     (let [xml (e/write-str el {:xml-version "1.1"})         ; Enable some extra encoding
           el* (e/read-str xml
-                          {:wrap-cdata true
-                           :preserve #{:processing-instruction :comment}
+                          {:wrap-cdata        true
+                           :preserve          #{:processing-instruction :comment}
                            :xml-input-factory noncoalescing-input-factory})]
       (= (canonicalize string? identity el)
          (canonicalize string? identity el*)))))
@@ -227,7 +239,7 @@
   (for-all [el element-gen-cdata]
     (let [xml (e/write-str el {:xml-version "1.1"})         ; Enable some extra encoding
           el* (e/read-str xml
-                          {:wrap-cdata true
+                          {:wrap-cdata        true
                            :xml-input-factory noncoalescing-input-factory})]
       (= (canonicalize string? identity el)
          (canonicalize string? identity el*)))))
