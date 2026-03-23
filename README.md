@@ -1,13 +1,14 @@
 # Eximia
 
-[![Clojars Project](https://img.shields.io/clojars/v/com.deepbeginnings/eximia.svg)](https://clojars.org/com.deepbeginnings/eximia)
-[![cljdoc badge](https://cljdoc.org/badge/com.deepbeginnings/eximia)](https://cljdoc.org/d/com.deepbeginnings/eximia/CURRENT)
-[![Build Status](https://img.shields.io/github/workflow/status/nilern/eximia/Run%20tests.svg)](https://github.com/nilern/eximia/actions)
+[![Clojars Project](https://img.shields.io/clojars/v/org.clojars.lowecg/eximia.svg)](https://clojars.org/org.clojars.lowecg/eximia)
+[![cljdoc badge](https://cljdoc.org/badge/org.clojars.lowecg/eximia)](https://cljdoc.org/d/org.clojars.lowecg/eximia/CURRENT)
 
 > *Eximia Cum Laude Approbatur* or just **E** is the second highest grade in the Finnish Matriculation Exam.
 > It was split off from the highest *Laudatur* grade [in 1996](https://en.wikipedia.org/wiki/XML#History).
 
 A fast and small XML processor for Clojure. With XML namespace support and secure defaults.
+
+This fork is published under the Maven coordinate `org.clojars.lowecg/eximia`.
 
 ## Fast
 

@@ -1,4 +1,4 @@
-{:source-paths ["src"]
+{:paths ["src"]
 
  :deps {org.clojure/clojure {:mvn/version "1.10.3", :scope "provided"}}
 
@@ -8,6 +8,9 @@
 
                                lambdaisland/kaocha {:mvn/version "1.0.732"}
                                lambdaisland/kaocha-cloverage {:mvn/version "1.0.75"}}}
+
+           :build {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.13"}}
+                   :ns-default build}
 
            :benchmark {:extra-paths ["bench"]
                        :extra-deps {criterium/criterium {:mvn/version "0.4.6"}

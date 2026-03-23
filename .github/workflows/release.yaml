@@ -1,0 +1,88 @@
+name: Release library
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Release
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: cljdeps-v1-${{ hashFiles('**/deps.edn') }}
+          restore-keys: cljdeps-v1-
+
+      - name: Prepare java
+        uses: actions/setup-java@v5
+        with:
+          distribution: corretto
+          java-version: "11"
+
+      - name: Install clojure tools
+        uses: DeLaGuardo/setup-clojure@13.6.0
+        with:
+          cli: latest
+
+      - name: Configure Clojars Maven settings
+        uses: s4u/maven-settings-action@v4.0.0
+        with:
+          servers: |
+            [{
+              "id": "clojars",
+              "username": "${{ secrets.CLOJARS_USERNAME }}",
+              "password": "${{ secrets.CLOJARS_TOKEN }}"
+            }]
+
+      - name: Resolve release version from tag
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          if [[ ! "$tag" =~ ^v.+$ ]]; then
+            echo "Expected a release tag in the form v<version>, got: $tag" >&2
+            exit 1
+          fi
+
+          version="${tag#v}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Run tests
+        run: bin/test
+
+      - name: Build release jar
+        run: |
+          clojure -T:build jar :version "\"${VERSION}\""
+
+      - name: Locate built artifacts
+        run: |
+          jar_file="$(find target -maxdepth 1 -type f -name "*-${VERSION}.jar" | head -n 1)"
+          pom_file="$(find target/classes/META-INF/maven -type f -name pom.xml | head -n 1)"
+
+          test -n "$jar_file"
+          test -f "$jar_file"
+          test -n "$pom_file"
+          test -f "$pom_file"
+
+          echo "JAR_FILE=${jar_file}" >> "$GITHUB_ENV"
+          echo "POM_FILE=${pom_file}" >> "$GITHUB_ENV"
+
+      - name: Publish to Clojars
+        run: |
+          mvn -B deploy:deploy-file \
+            -DrepositoryId=clojars \
+            -Durl=https://repo.clojars.org \
+            -Dfile="${PWD}/${JAR_FILE}" \
+            -DpomFile="${PWD}/${POM_FILE}"
